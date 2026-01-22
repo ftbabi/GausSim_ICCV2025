@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Gaussian Splatting Demo</title>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <style>
+      body { margin: 0; overflow: hidden; }
+      #renderedImage {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100vw; 
+        height: 100vh;
+        object-fit: cover;
+      }
+    </style>
+  </head>
+  <body>
+    <img id="renderedImage" />
+    <script>
+      const socket = io();
+
+      let isDragging = false;
+      let anchorX = null;
+      let anchorY = null;
+      
+      let cameraPos = [0.0, 0.0, 0.0];
+      let cameraRot = [0.0, 0.0, 0.0];
+
+      function onMouseDown(event) {
+        if (event.button != 1) {
+            anchorX = null;
+            anchorY = null;
+            return;
+        }
+
+        event.preventDefault();
+        isDragging = true;
+        
+        anchorX = event.clientX;
+        anchorY = event.clientY;
+        // // Convert mouse to normalized device coords [-1..1]
+        // mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+        // mouse.y = - ( event.clientY / window.innerHeight ) * 2 + 1;
+      }
+
+      function onMouseMove(event) {
+        return;
+      }
+
+      function onMouseUp(event) {
+        if (event.button != 1) return;
+
+        const forceScale = 0.01;
+        const force = {
+          x: (event.clientX - anchorX) * forceScale,
+          y: (-event.clientY + anchorY) * forceScale,
+          z: 0
+        };
+
+        socket.emit('applyForce', {
+            force: force
+        });
+
+        anchorX = null;
+        anchorY = null;
+      }
+
+      window.addEventListener('mousedown', onMouseDown);
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+
+    
+      // Send updated camera to the server
+      function sendCameraUpdate() {
+        socket.emit('updateCamera', {
+          translation: cameraPos,
+          rotation: cameraRot
+        });
+        // Clean
+        cameraPos = [0.0, 0.0, 0.0];
+        cameraRot = [0.0, 0.0, 0.0];
+      }
+
+      window.addEventListener('keydown', (e) => {
+        const rot_speed = 1.0;
+        const pos_speed = 0.1;
+        
+        switch(e.key) {
+          case 'i':
+            cameraRot[0] -= rot_speed; // rot up
+            break;
+          case 'k':
+            cameraRot[0] += rot_speed; // rot down
+            break;
+          case 'j':
+            cameraRot[1] += rot_speed; // rot left
+            break;
+          case 'l':
+            cameraRot[1] -= rot_speed; // rot right
+            break;
+          case 'u':
+            cameraRot[2] -= rot_speed; // cam rot clockwise
+            break;
+          case 'o':
+            cameraRot[2] += rot_speed; // cam rot anti-clockwise
+            break;
+          case 'w':
+            cameraPos[2] += pos_speed; // move forward
+            break;
+          case 's':
+            cameraPos[2] -= pos_speed; // move backward
+            break;
+          case 'a':
+            cameraPos[0] -= pos_speed; // move left
+            break;
+          case 'd':
+            cameraPos[0] += pos_speed; // move right
+            break;
+          case 'q':
+            cameraPos[1] -= pos_speed; // move up
+            break;
+          case 'e':
+            cameraPos[1] += pos_speed; // move down
+            break;
+          default:
+            console.log(`Sorry, we are out of ${e.key}.`);
+            return;
+        }
+
+        sendCameraUpdate();
+        e.preventDefault();
+      });
+
+      // Display new frames
+      sendCameraUpdate();
+      socket.on('renderFrame', (dataUrl) => {
+        const imgEl = document.getElementById("renderedImage");
+        imgEl.src = dataUrl;
+      });
+    </script>
+  </body>
+</html>
